@@ -1,0 +1,150 @@
+import pandas as pd  # Import pandas library
+
+# Load dataset
+df_raw = pd.read_csv('Train.csv')
+df = df_raw.copy(deep=True)
+
+# Preview of dataset
+df.head()
+
+from google.colab import files
+uploaded = files.upload()
+
+  # import libraries
+import numpy as np
+from scipy import stats
+from sklearn.preprocessing import LabelEncoder
+
+# Drop unwanted features if they exist in the DataFrame
+unwanted_features = ['Var_1', 'Segmentation']
+df = df.drop(columns=unwanted_features, errors='ignore')
+
+# remove missing values
+df = df.dropna()
+
+# create a set storing outliers
+outliers = set()
+
+# calculate z_scores for age, work_experience, and family_size
+scores = pd.DataFrame(columns=['ID', 'Age', 'Work_Experience', 'Family_Size'])
+scores['ID'] = df['ID']
+for var in ['Age', 'Work_Experience', 'Family_Size']:
+    scores[var] = np.abs(stats.zscore(df[var]))
+
+# find and remove outliers
+for i, row in scores.iterrows():
+    if np.max(row[['Age', 'Work_Experience', 'Family_Size']]) > 3:
+        outliers.add(row['ID'])
+df = df.loc[~df['ID'].isin(outliers)]
+
+# keep a copy of this dataset for future visualization
+df_viz = df.copy(deep=True)
+# Encode categorical variables
+le = LabelEncoder()
+cat_vars = ['Gender', 'Ever_Married', 'Graduated', 'Spending_Score']
+for var in cat_vars:
+    df[var] = le.fit_transform(df[var])
+
+# Check if 'Profession' column exists before processing
+if 'Profession' in df.columns:
+    df = pd.concat([df, pd.get_dummies(df['Profession'])], axis=1)
+    df = df.drop('Profession', axis=1)
+else:
+    print("'Profession' column not found. Skipping further processing.")
+# import libraries
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+
+# normalize daa with MinMaxScaler
+mms = MinMaxScaler()
+X = df.drop('ID', axis=1)
+X_mms = mms.fit_transform(X)
+
+# reduce dimensionality with PCA
+print('Number of features before PCA: {}'.format(len(X_mms[0])))
+pca = PCA(.90)
+X_pca = pca.fit_transform(X_mms)
+print('Number of features after PCA: {}'.format(len(X_pca[0])))
+# import libraries
+from sklearn.cluster import KMeans
+from yellowbrick.cluster import KElbowVisualizer
+
+# create a kmeans model
+model = KMeans(random_state=42)
+
+# use the KElbowVisualizer to calculate distortion for different numbers of clusters
+visualizer = KElbowVisualizer(model, k=(2,10))
+visualizer.fit(X_pca)  
+visualizer.show()
+import warnings
+
+# Suppress specific future warnings
+warnings.filterwarnings("ignore", message="The default value of `n_init` will change from 10 to 'auto' in 1.4.*")
+
+# Your code for clustering and other operations here...
+# create a k-means model and assign each customer to a cluster
+kmeans = KMeans(n_clusters=4, random_state=42)
+prediction = kmeans.fit_predict(X_pca)
+
+# import libraries
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# first PCA component
+pca1 = [val[0] for val in X_pca]
+# second PCA component
+pca2 = [val[1] for val in X_pca]
+
+# add the cluster and PCA components to the dataframe
+df_viz['Cluster'] = prediction
+df_viz['PCA 1'] = pca1
+df_viz['PCA 2'] = pca2
+
+# plot scatter plot
+sns.scatterplot(data=df_viz, x='PCA 1', y='PCA 2', hue='Cluster')
+plt.title('Customer Segmentation With K-Means')
+plt.show()
+
+# Comparing clusters based on graduation status
+cluster_demographic('Graduated')
+
+# Comparing clusters based on spending score 
+cluster_demographic('Spending_Score')
+
+# Create boxplots to show age, work experience, and family size for each cluster
+fig, axes = plt.subplots(1, 3, figsize=(15,5))
+ax = sns.boxplot(ax=axes[0], x="Cluster", y="Age", data=df_viz)
+ax.title.set_text('Age in All Clusters')
+ax2 = sns.boxplot(ax=axes[1], x="Cluster", y="Work_Experience", data=df_viz)
+ax2.title.set_text('Work Experience in All Clusters')
+ax3 = sns.boxplot(ax=axes[2], x="Cluster", y="Family_Size", data=df_viz)
+ax3.title.set_text('Family Size in All Clusters')
+plt.show()
+
+# create a function to generate pie charts for a given categorical feature
+def cluster_demographic(var):
+    
+    # Create subsets for each cluster
+    df_0 = df_viz[df_viz['Cluster']==0]
+    df_1 = df_viz[df_viz['Cluster']==1]
+    df_2 = df_viz[df_viz['Cluster']==2]
+    df_3 = df_viz[df_viz['Cluster']==3]
+
+    fig, ax = plt.subplots(2, 2)
+
+
+    ax[0,0].pie(df_0[var].value_counts(), labels=df_0[var].value_counts().index)
+    ax[0,0].title.set_text('Cluster 0')
+    ax[0,1].pie(df_1[var].value_counts(), labels=df_1[var].value_counts().index)
+    ax[0,1].title.set_text('Cluster 1')
+    ax[1,0].pie(df_2[var].value_counts(), labels=df_2[var].value_counts().index)
+    ax[1,0].title.set_text('Cluster 2')
+    ax[1,1].pie(df_3[var].value_counts(), labels=df_3[var].value_counts().index)
+    ax[1,1].title.set_text('Cluster 3')
+    plt.suptitle(var)
+
+    plt.show()
+    # Comparing clusters based on gender
+cluster_demographic('Gender')
+#Comparingclustersbasedongraduationstatus
+
